@@ -22,16 +22,15 @@ def CHS_indeed_Spend():
     pd.set_option('display.max_columns', 500)
     pd.set_option('display.width', 1000)
 
-    def p2f(x):
-        return float(x.strip('%')) / 100
-
-    for blob in client.list_blobs("hc_chs_ats", prefix="File_Upload/"):
+    for blob in client.list_blobs("hc_chs_indeed-spend", prefix="File_Upload/"):
         f = re.search("/(.+?).csv", str(blob))
         if f:
             DateField = re.search("[0-9]+-[0-9]+-[0-9]+", str(f.group(1))).group(0)
 
-            dataframe = pd.read_csv('gs://hc_chs_ats/File_Upload/' + f.group(1) + ".csv", header=1)
+            dataframe = pd.read_csv('gs://hc_chs_indeed-spend/File_Upload/' + f.group(1) + ".csv", header=1)
             dataframe = dataframe.drop(dataframe.index[0])
+            if dataframe.empty:
+                continue
             dataframe['Date'] = DateField
             dataframe['Date'] = pd.to_datetime(dataframe['Date'], errors='coerce').dt.date
             dataframe['Last updated date'] = pd.to_datetime(dataframe['Last updated date'], errors='coerce').dt.date
@@ -49,12 +48,8 @@ def CHS_indeed_Spend():
                                       'Clicks Sponsored': 'Clicks_Sponsored',
                                       'Clicks Organic': 'Clicks_Organic',
                                       'Clicks Combined': 'Clicks_Combined',
-                                      'Impressions Sponsored': 'Impressions_Sponsored',
                                       'Impressions Organic': 'Impressions_Organic',
                                       'Impressions Combined': 'Impressions_Combined',
-                                      'Clicks Sponsored': 'Clicks_Sponsored',
-                                      'Clicks Organic': 'Clicks_Organic',
-                                      'Clicks Combined': 'Clicks_Combined',
                                       'Sponsored Applies Sponsored': 'Sponsored_Applies_Sponsored',
                                       'CTR Sponsored': 'CTR_Sponsored',
                                       'CTR Organic': 'CTR_Organic',
@@ -87,30 +82,30 @@ def CHS_indeed_Spend():
             dataframe = dataframe.round(2)
 
             print(dataframe)
-            query_string = """
-                        SELECT 
-                        * 
-                        FROM 
-                        `hireclix.chs.indeed_master`
-                        """
-            try:
-                bgdata = (
-                    bqclient.query(query_string)
-                        .result()
-                        .to_dataframe(bqstorage_client=bqstorageclient)
-                )
-                dataframe = bgdata.append(dataframe, True)
-                dataframe = dataframe.drop_duplicates(
-                    subset=['Job_title', 'Location', 'Company', 'Reference_number', 'Source_website',
-                            'URL', 'Impressions_Sponsored', 'Impressions_Organic', 'Impressions_Combined',
-                            'Clicks_Sponsored', 'Clicks_Organic', 'Clicks_Combined', 'Sponsored_Applies_Sponsored',
-                            'CTR_Sponsored', 'CTR_Organic', 'CTR_Combined', 'Sponsored_Apply_rate_Sponsored', 'AVG_CPC',
-                            'AVG_CPA', 'Total_cost', 'Date', 'Source'], keep="last")
-            except exceptions.NotFound:
-                print("Big query Table not Found, Creating New one")
+            # query_string = """
+            #             SELECT
+            #             *
+            #             FROM
+            #             `hireclix.chs.indeed_master`
+            #             """
+            # try:
+            #     print("Retrieving data")
+            #     bgdata = (
+            #         bqclient.query(query_string)
+            #             .result()
+            #             .to_dataframe(bqstorage_client=bqstorageclient)
+            #     )
+            #     dataframe = bgdata.append(dataframe, True)
+            #     print("dedup")
+            #     dataframe = dataframe.drop_duplicates(
+            #         subset=['Job_title', 'Location', 'Company', 'Reference_number', 'Source_website',
+            #                 'URL', 'Date', 'Source'], keep="last")
+            # except exceptions.NotFound:
+            #     print("Big query Table not Found, Creating New one")
 
+            print("to bq")
             pandas_gbq.to_gbq(dataframe, 'chs.indeed_master', project_id='hireclix',
-                              if_exists='replace',
+                              if_exists='append',
                               table_schema=[{'name': 'Status', 'type': 'STRING'},
                                             {'name': 'Job_title', 'type': 'STRING'},
                                             {'name': 'Location', 'type': 'STRING'},
@@ -136,6 +131,16 @@ def CHS_indeed_Spend():
                                             {'name': 'Total_cost', 'type': 'FLOAT'},
                                             {'name': 'Date', 'type': 'DATE'},
                                             {'name': 'Source', 'type': 'STRING'}])
+            # print("fixing GCS")
+            # dataframe.to_csv(
+            #     'gs://hc_chs_indeed-spend/File_Backup/' + f.group(1) + "_" +
+            #     str(datetime.today().date()) + "_Merged.csv", index=False)
+            found = f.group(1) + ".csv"
+            source_bucket = client.get_bucket("hc_chs_indeed-spend")
+            source_blob = source_bucket.blob("File_Upload/" + found)
+            destination_bucket = client.get_bucket("hc_chs_indeed-spend")
+            blob_copy = source_bucket.copy_blob(source_blob, destination_bucket, "File_Completed/" + found)
+            source_blob.delete()
 
 
 CHS_indeed_Spend()

@@ -1,0 +1,6 @@
+import requests
+
+FBToken = "EAAV7gkt6llgBAPg3nOFoyPXLBph1Y6sbApYvluqYqQxyEZAIRqRyqkNoeFPIZCMgnZBCfXgIjfF6XZBuZCpjqez5l7ZCVZBkLnrmjVQkRkzZCBLqWc8GDixBZAUwZA2GzdkZB3FqgZAQOpRLEzP584IfZBGFt5XMTMwvrNBuh3OjtBSmnY94rZBmgZAW00Qi7iE0GTovdQxAmHx99ZBdeVmDR6EvZBPNgk8hK7DfPBhlsl7xhvfZAshAZDZD"
+
+web_response = requests.get("https://www.facebook.com/AvieyBaby/")
+print(web_response.content)
